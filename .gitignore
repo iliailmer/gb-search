@@ -30,3 +30,7 @@ n
 
 # End of https://www.toptal.com/developers/gitignore/api/vscode
 n
+
+###
+
+*groebner*
