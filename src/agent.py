@@ -1,15 +1,16 @@
+import os
 import re
 import subprocess
-from typing import List
-from sympy.polys import groebner
 import time
+from typing import List, Union
+
 import numpy as np
 from sympy import parse_expr
-from typing import Union
+from sympy.polys import groebner
 
 
 class Agent:
-    """Class Agent. It carries the weights for
+    """Class Agent. It carries the substitutions for
     each variable in polynomial system"""
 
     def __init__(
@@ -26,14 +27,19 @@ class Agent:
             self.system = system
             self.original = system
             self.variables = variables
-        self.weights = [1 for _ in self.variables]
+        self.substitutions = [1 for _ in self.variables]
         self.framework = framework
         self._path_to_framework = dict(maple="/Applications/Maple 2020/maple")
 
-    def substitute(self, weights=None):
-        """apply weights to system"""
+    def reset(self):
+        self.system = self.original
 
-        substitutions = {v: v ** w for (v, w) in zip(self.variables, weights)}
+    def substitute(self, substitutions=None):
+        """apply substitutions to system"""
+
+        substitutions = {
+            v: v ** w for (v, w) in zip(self.variables, substitutions)
+        }
         self.system = [s.subs(substitutions) for s in self.original]
         return self.system
 
@@ -46,18 +52,44 @@ class Agent:
             + ", ".join([str(x) for x in self.variables])
         )
 
-    def step(self, weights=None):
-        if weights:
-            self.weights = weights
-        self.system = self.substitute(self.weights)
-        print("Calculating GB")
-        start = time.time()
-        _ = groebner(self.system, self.variables, method="f5b")
-        finish = time.time() - start
-        reward = -np.log(
-            finish + 1e-8  # eps, just in case
-        )  # if we maximize reward, we want to minimize time
-        return reward, self.weights
+    def step(self, substitutions=None, default_finish=100):
+        if substitutions:
+            self.substitutions = substitutions
+        self.system = self.substitute(self.substitutions)
+        print("\nCalculating GB")
+        if self.framework != "maple":
+            start = time.time()
+            _ = groebner(self.system, self.variables, method="f5b")
+            finish = time.time() - start
+        else:
+            if default_finish:
+                cmd = (
+                    "start:=time():\ntry\n"
+                    f"\tgb:=timelimit({default_finish}, "
+                    f"Groebner[Basis]({self.system}, "
+                    f"tdeg(op({self.variables})))):\n"
+                    f'catch:\n\tprint("TIMEOUT"):\n'
+                    "end try;\n"
+                    "finish := time()-start;"
+                )
+            else:
+                cmd = (
+                    "start:=time();\n"
+                    f"gb:=Groebner[Basis]({self.system}, "
+                    f"tdeg(op({self.variables}))):\n"
+                    "finish := time()-start;"
+                )
+            with open("tmp.mpl", "w") as f:
+                f.write(cmd)
+            out = os.popen("maple2020 tmp.mpl").read()
+            finish = float(
+                re.findall(r"finish\s*:=\s*[-+]?[0-9]*\.?[0-9]+", out)[
+                    0
+                ].split(":=")[1]
+            )
+
+        print(f"\tTIME: {finish}\n\tSUBSTITUTION: {self.substitutions}")
+        return finish, self.substitutions
 
         # with open("./src/system.mpl", "w") as f:
         #     f.write(

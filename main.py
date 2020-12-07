@@ -1,51 +1,64 @@
-from input_systems.utils import get_example_2
+import os
+import argparse
+
+from sympy import parse_expr, simplify, symbols
 from torch import optim
 from torch.nn import L1Loss
 
-from input_systems import get_example_2
+from input_systems.generate_poly import get_system
+from input_systems.utils import get_example_2
 from src.agent import Agent
 from src.network import Network
 from src.training import Trainer
-from src.generate_poly import generate_rhs
-from sympy import symbols, parse_expr, simplify
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--random", type=int, required=False, default=1)
+parser.add_argument("--input-file", type=str, default="system_1")
+args = parser.parse_args()
 
-def generate_system(size: int = 5, num_variables: int = 5):
-    variables = symbols(f"x1:{num_variables}")
-    system = []
-    i = 0
-    x = simplify(
-        parse_expr(generate_rhs(5, params=variables, functions=variables))
+if args.random:
+    s = get_system(
+        "input_systems/source_systems/Cholera.mpl",
+        math_symbols=None,
+        rhs_size=6,
+        out_size=1,
+        num_y=2,
     )
-    while i < len(variables):
-        if x != 0:
-            system.append(x)
-            x = simplify(
-                parse_expr(
-                    generate_rhs(5, params=variables, functions=variables)
-                )
+    with open("system_.mpl", "w") as f:
+        f.write(
+            (
+                "kernelopts(printbytes=false):\ninterface(echo=0,"
+                + " prettyprint=0):\n"
+                + 'read "input_systems/generate_poly_system.mpl":\n'
+                + "sigma := [\n\t"
+                + ",\n\t".join(s).replace("Derivative", "diff")
+                + "\n]:\n"
+                + "system_vars := GetPolySystem"
+                + "(sigma, GetParameters(sigma)):\n"
+                + 'writeto("system_vars.mpl"):\n'
+                + "printf(`%a`, system_vars[1]);\n"
+                + "printf(`\\n%a`, system_vars[2]);\n"
+                + "writeto(terminal):\n"
+                + "quit:"
             )
-            i += 1
-        else:
-            x = simplify(
-                parse_expr(
-                    generate_rhs(5, params=variables, functions=variables)
-                )
-            )
-    return variables, system
+        )
+    os.system("maple2020 system_.mpl")
+else:
+    os.system(f"maple2020 {args.input_file}.mpl")
 
+with open("system_vars.mpl") as f:
+    system_vars = [
+        x.strip("[],\n").replace("^", "**").split(", ") for x in f.readlines()
+    ]
 
-(
-    variables,
-    system,
-) = get_example_2()  # generate_system(size=5, num_variables=5)
+system = [parse_expr(e) for e in system_vars[0]]
+variables = [parse_expr(e) for e in system_vars[1]]
+
 agent = Agent(system, variables)
-network = Network(
-    in_features=len(agent.variables), num_weights=len(agent.variables)
-)
-loss_fn = None  # L1Loss()
+network = Network(in_features=1, num_weights=len(agent.variables))
+
 optimizer = optim.AdamW(network.parameters(), lr=1e-3)
-trainer = Trainer(agent, network, optimizer, loss_fn=loss_fn, epochs=10)
+trainer = Trainer(agent, network, optimizer, episodes=2, epochs=100)
 
 if __name__ == "__main__":
     trainer.run()

@@ -22,5 +22,5 @@ class Network(nn.Module):
         )
 
     def forward(self, x):
-        logits = self.features_to_weights(x.float())
-        return (logits, self.weights_to_log_runtime(logits))
+        logits = self.features_to_weights(x)
+        return logits  # (logits, self.weights_to_log_runtime(logits))

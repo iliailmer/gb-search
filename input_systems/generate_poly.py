@@ -31,7 +31,10 @@ def read_system(name: str) -> Tuple[str, ...]:
 
 
 def get_right_hand_sides(sigma: str) -> List[Expression]:
-    expressions = [parse_expr(eq) for eq in list(sigma.split(",\n"))]
+    expressions = [
+        parse_expr(eq, local_dict={"beta": parse_expr("beta_")})
+        for eq in list(sigma.split(",\n"))
+    ]
     return expressions
 
 
@@ -53,7 +56,7 @@ def generate_rhs(
     params: __Symbols = symbols("a:e"),
     functions: __Symbols = (Function("x(t)"), Function("y(t)")),
 ):
-    size = np.random.randint(size // 2, size)
+    size = max(1, np.random.randint(size // 2, size))
     out = list()
     for _ in range(size):
         try:
@@ -136,6 +139,88 @@ parser.add_argument(
     default="",
 )
 
+
+def get_system(
+    name: str,
+    math_symbols: List["str"],
+    rhs_size: int,
+    out_size: int,
+    num_y: int,
+):
+    result = []
+    sigma, y_outputs = read_system(name)
+    expressions = get_right_hand_sides(sigma)
+    y_expressions = get_right_hand_sides(y_outputs)
+    params = []
+    functions = []
+    derivatives = []
+    y_functions = []
+    for idx, each in enumerate(expressions):
+        params.extend(get_params(each))
+        functions.extend(get_functions(each))
+        derivatives.extend(get_derivatives(each))
+    for idx, each in enumerate(y_expressions):
+        fun = get_functions(each)
+        for other in fun:
+            if other not in functions:
+                y_functions.append(other)
+    functions = list(set(functions))
+    params = list(set(params))
+    params.append("1")
+    derivatives = list(set(derivatives))
+    print("Functions: ", functions)
+    print("Output functions (y_i(t)): ", y_functions)
+    print("Parameters: ", params)
+    print("Derivatives: ", derivatives)
+    if not math_symbols:
+        ms = [" * ", " + ", " - "]
+    else:
+        ms = math_symbols
+    for idx, each in enumerate(expressions):
+        generated = generate_rhs(rhs_size, ms, params, functions)
+        if derivatives:
+            if str(derivatives[idx % len(derivatives)].args[0]) in generated:
+                result.append(
+                    (
+                        f"{derivatives[idx % len(derivatives)]}"
+                        + " = "
+                        + f"{generated}"
+                    )
+                )
+            else:
+                lhs_functions = (
+                    str(params[np.random.choice(len(params))])
+                    + str(ms[np.random.choice(len(ms))])
+                    + str(derivatives[idx % len(derivatives)].args[0])
+                )
+                result.append(
+                    (
+                        f"{derivatives[idx % len(derivatives)]}"
+                        + " = "
+                        + f"{generated}"
+                        + [" + ", " - ", " * "][np.random.choice(3)]
+                        + lhs_functions
+                    )
+                )
+        else:
+            result.append(("0=" + f"{generated}"))
+    if num_y < 0:
+        for idx, each in enumerate(y_expressions):
+            generated = generate_rhs(out_size, ms, params, functions)
+            if derivatives:
+                result.append((f"{y_functions[idx]}" + " = " + f"{generated}"))
+            else:
+                result.append(("0=" + f"{generated}"))
+    else:
+        for idx in range(num_y):
+            generated = generate_rhs(out_size, ms, params, functions)
+            if derivatives:
+                result.append((f"y{idx+1}(t)" + " = " + f"{generated}"))
+            else:
+                result.append(("0=" + f"{generated}"))
+    return result
+
+
 if __name__ == "__main__":
     args = parser.parse_args()
     result = []
@@ -214,10 +299,6 @@ if __name__ == "__main__":
             else:
                 result.append(("0=" + f"{generated}"))
     with open(args.output_name, "w") as f:
-        if "_" in args.output_name:
-            name = args.output_name.split("_")[1].split(".")[0]
-        else:
-            name = args.output_name
         f.write(
             (
                 "kernelopts(printbytes=false):\n"
