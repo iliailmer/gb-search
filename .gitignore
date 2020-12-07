@@ -35,6 +35,8 @@ n
 
 *groebner*
 
+__pycache__
+
 .python-version
 *.mpl
 *.txt

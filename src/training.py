@@ -93,7 +93,7 @@ class Trainer:
             total_reward = sum(self.runtimes)
             episode_length = len(self.runtimes)  # 10
 
-            weights = torch.tensor([[total_reward] * episode_length])
+            weights = torch.tensor([[-total_reward] * episode_length])
             loss = self.loss_fn(
                 torch.tensor(self.runtimes).view((-1, 1)),
                 torch.tensor(self.substitutions).view((-1, episode_length)),
