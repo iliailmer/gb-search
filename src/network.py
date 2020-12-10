@@ -1,24 +1,25 @@
 """Neural network that generates weight vector based on the agent's reward."""
 
-from torch import nn
 import torch
-from torch.nn.modules.activation import Softmax
+from torch import nn
 
 
 class Network(nn.Module):
     def __init__(self, in_features: int, num_weights=6) -> None:
+        """A neural network that produces the underlying substitution sample.
+
+        The network produces logits which are later converted by the
+        trainer into the suitable substitution.
+        """
         super().__init__()
         self.features_to_weights = nn.Sequential(
-            nn.Linear(in_features, 32),
-            nn.Tanh(),
-            nn.Linear(32, 16),
-            nn.Tanh(),
-            nn.Linear(16, 8),
-            nn.Tanh(),
-            nn.Linear(8, num_weights),
-        )
-        self.weights_to_log_runtime = nn.Sequential(
-            nn.Tanh(), nn.Linear(num_weights, 8), nn.Tanh(), nn.Linear(8, 1)
+            nn.Linear(in_features, 64),
+            nn.ReLU(inplace=True),
+            nn.Linear(64, 64),
+            nn.ReLU(inplace=True),
+            nn.Linear(64, 16),
+            nn.ReLU(inplace=True),
+            nn.Linear(16, num_weights),
         )
 
     def forward(self, x):

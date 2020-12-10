@@ -35,7 +35,7 @@ n
 
 *groebner*
 
-__pycache__
+*/__pycache__
 
 .python-version
 *.mpl
@@ -44,3 +44,4 @@ __pycache__
 .mypy_cache
 maple_interface
 LICENCE
+.DS_Store

@@ -1,12 +1,10 @@
-import os
 import argparse
+import os
 
-from sympy import parse_expr, simplify, symbols
+from sympy import parse_expr
 from torch import optim
-from torch.nn import L1Loss
 
 from input_systems.generate_poly import get_system
-from input_systems.utils import get_example_2
 from src.agent import Agent
 from src.network import Network
 from src.training import Trainer
@@ -21,7 +19,7 @@ if args.random:
         "input_systems/source_systems/Cholera.mpl",
         math_symbols=None,
         rhs_size=6,
-        out_size=1,
+        out_size=2,
         num_y=2,
     )
     with open("system_.mpl", "w") as f:
@@ -54,11 +52,13 @@ with open("system_vars.mpl") as f:
 system = [parse_expr(e) for e in system_vars[0]]
 variables = [parse_expr(e) for e in system_vars[1]]
 
-agent = Agent(system, variables)
-network = Network(in_features=1, num_weights=len(agent.variables))
+agent = Agent(system=system, variables=variables, attempts=3)
+network = Network(in_features=1, num_weights=3)
 
 optimizer = optim.AdamW(network.parameters(), lr=1e-3)
-trainer = Trainer(agent, network, optimizer, episodes=2, epochs=100)
+trainer = Trainer(
+    agent=agent, network=network, optimizer=optimizer, episodes=1, epochs=100
+)
 
 if __name__ == "__main__":
     trainer.run()

@@ -7,6 +7,9 @@ from typing import List, Union
 import numpy as np
 from sympy import parse_expr
 from sympy.polys import groebner
+import logging
+
+logging.getLogger().setLevel(logging.INFO)
 
 
 class Agent:
@@ -18,7 +21,24 @@ class Agent:
         system: Union[str, List],
         variables: Union[str, List],
         framework: str = "maple",
+        attempts: int = 1,
     ):
+        """A reinforcement learning agent. This class performs Groebner Basis
+        computation when the `step(substitution)` function is called.
+
+        Parameters:
+        -----------
+        system : `str` or `list[str]` or `list[sympy.Poly]`.
+                 An input system for which GB is to be computed.
+        variables : `str` or `list[str]` or `list[sympy.Symbol]`.
+                    Variables used in the provided polynomial system.
+        framework : `str`.
+                     The name of the framework used to compute GB.
+                     Can be either `maple` or `sympy`. Default: `maple`.
+        attempts : `int`.
+                    The number of times GB is computed to find
+                    the average runtime.
+        """
         try:
             self.system = parse_expr(system)
             self.original = parse_expr(system)
@@ -29,7 +49,7 @@ class Agent:
             self.variables = variables
         self.substitutions = [1 for _ in self.variables]
         self.framework = framework
-        self._path_to_framework = dict(maple="/Applications/Maple 2020/maple")
+        self.attempts = attempts
 
     def reset(self):
         self.system = self.original
@@ -56,7 +76,7 @@ class Agent:
         if substitutions:
             self.substitutions = substitutions
         self.system = self.substitute(self.substitutions)
-        print("\nCalculating GB")
+        logging.info("\nCalculating GB")
         if self.framework != "maple":
             start = time.time()
             _ = groebner(self.system, self.variables, method="f5b")
@@ -81,14 +101,17 @@ class Agent:
                 )
             with open("tmp.mpl", "w") as f:
                 f.write(cmd)
-            out = os.popen("maple2020 tmp.mpl").read()
-            finish = float(
-                re.findall(r"finish\s*:=\s*[-+]?[0-9]*\.?[0-9]+", out)[
-                    0
-                ].split(":=")[1]
-            )
+            finish = 0.0
+            for attempt in range(self.attempts):
+                out = os.popen("maple2020 tmp.mpl").read()
+                finish += float(
+                    re.findall(r"finish\s*:=\s*[-+]?[0-9]*\.?[0-9]+", out)[
+                        0
+                    ].split(":=")[1]
+                )
+            finish /= self.attempts
 
-        print(f"\tTIME: {finish}\n\tSUBSTITUTION: {self.substitutions}")
+        logging.info(f"\tTIME: {finish}\n\tSUBSTITUTION: {self.substitutions}")
         return finish, self.substitutions
 
         # with open("./src/system.mpl", "w") as f:
